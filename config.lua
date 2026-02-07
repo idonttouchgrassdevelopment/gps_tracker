@@ -248,6 +248,8 @@ Config.Jobs = {
 Config.Notifications = {
     ['tracker_enabled'] = 'GPS Tracker enabled',
     ['tracker_disabled'] = 'GPS Tracker disabled',
+    ['status_enabled'] = 'GPS Tracker is enabled',
+    ['status_disabled'] = 'GPS Tracker is disabled',
     ['no_item'] = 'You need a GPS device to use the tracker',
     ['not_on_duty'] = 'You must be on duty to use the tracker',
     ['not_authorized'] = 'You are not authorized to use the GPS tracker',
@@ -265,6 +267,7 @@ Config.Commands = {
     enable = 'enabletracker',    -- Command to manually enable tracker
     disable = 'disabletracker',  -- Command to manually disable tracker
     status = 'trackerstatus',    -- Command to check tracker status
+    callsign = 'setcallsign',    -- Command to set your callsign (example: /setcallsign A-12)
 }
 
 -- =============================================================================

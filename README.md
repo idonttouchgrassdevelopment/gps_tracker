@@ -10,7 +10,7 @@ A complete, production-ready GPS tracking system for FiveM roleplay servers. Fea
 - **Optional Item Requirement**: Configurable requirement for players to have a specific item in inventory
 - **Framework Support**: Full compatibility with ESX and QBCore frameworks
 - **Performance Optimized**: Efficient update intervals and batch processing for high-player-count servers
-- **Customizable Blips**: Configure different blip sprites, colors, sizes, and labels per job type
+- **Customizable Blips**: Configure different blip sprites, colors, and sizes per job type (with player-name labels + optional callsigns)
 - **Distance Limiting**: Optional maximum distance for blip visibility
 
 ## Requirements
@@ -177,6 +177,7 @@ By default, the following commands are available (configure in `config.lua`):
 - `/enabletracker` - Manually enable the GPS tracker
 - `/disabletracker` - Manually disable the GPS tracker
 - `/trackerstatus` - Check current tracker status
+- `/setcallsign <text>` - Set or clear your map callsign (leave empty to clear)
 
 ## Framework-Specific Notes
 
