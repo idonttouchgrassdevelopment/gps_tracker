@@ -2,17 +2,12 @@
 -- GPS TRACKER CLIENT SCRIPT
 -- =============================================================================
 
--- Initialize variables
 local PlayerData = {}
 local TrackerEnabled = false
 local PlayerBlips = {}
 local Framework = nil
 local ESX = nil
 local QBCore = nil
-
--- =============================================================================
--- NOTIFICATION FUNCTION (MOVED TO TOP - FIXES ERROR)
--- =============================================================================
 
 local function ShowNotification(type)
     local message = (Config.Notifications and Config.Notifications[type]) or type
@@ -22,15 +17,11 @@ local function ShowNotification(type)
     elseif Framework == 'QBCore' and QBCore then
         QBCore.Functions.Notify(message, 'info', 3000)
     else
-        SetNotificationTextEntry("STRING")
+        SetNotificationTextEntry('STRING')
         AddTextComponentString(message)
         DrawNotification(false, false)
     end
 end
-
--- =============================================================================
--- FRAMEWORK DETECTION
--- =============================================================================
 
 local function DetectFramework()
     if Config.Framework ~= 'Auto' then
@@ -48,13 +39,9 @@ local function DetectFramework()
     return 'ESX'
 end
 
--- =============================================================================
--- ESX INITIALIZATION
--- =============================================================================
-
 local function InitializeESX()
     Framework = 'ESX'
-    ESX = exports["es_extended"]:getSharedObject()
+    ESX = exports['es_extended']:getSharedObject()
 
     RegisterNetEvent('esx:playerLoaded', function(xPlayer)
         PlayerData = xPlayer
@@ -69,13 +56,7 @@ local function InitializeESX()
             CheckJobAndEnableTracker()
         end
     end)
-
-    print('[GPS Tracker] ESX initialized')
 end
-
--- =============================================================================
--- QBCORE INITIALIZATION
--- =============================================================================
 
 local function InitializeQBCore()
     Framework = 'QBCore'
@@ -94,13 +75,7 @@ local function InitializeQBCore()
             CheckJobAndEnableTracker()
         end
     end)
-
-    print('[GPS Tracker] QBCore initialized')
 end
-
--- =============================================================================
--- JOB CHECKING
--- =============================================================================
 
 local function IsJobConfigured(jobName)
     if not jobName then return false end
@@ -147,12 +122,9 @@ local function CanUseTracker()
     if Config.RequireItem then
         local hasItem = false
 
-        if Framework == 'ESX' and ESX then
-            -- Modern ESX method
-            local count = exports.ox_inventory and exports.ox_inventory:Search('count', Config.RequiredItem)
-            if count and count > 0 then
-                hasItem = true
-            end
+        if Framework == 'ESX' and exports.ox_inventory then
+            local count = exports.ox_inventory:Search('count', Config.RequiredItem)
+            hasItem = count and count > 0
         elseif Framework == 'QBCore' and QBCore then
             local item = QBCore.Functions.GetItemByName(Config.RequiredItem)
             hasItem = item ~= nil and item.amount > 0
@@ -181,17 +153,77 @@ function CheckJobAndEnableTracker()
     end
 end
 
--- =============================================================================
--- TRACKER CONTROL
--- =============================================================================
+local function ResolveBlipColor(color)
+    if type(color) == 'number' then
+        return color
+    end
+
+    if type(color) == 'string' and Config.StandardColors and Config.StandardColors[color] then
+        return Config.StandardColors[color]
+    end
+
+    return 1
+end
+
+local function BuildBlipLabel(data)
+    local name = data.playerName or 'Unknown'
+    if data.callsign and data.callsign ~= '' then
+        return ('[%s] %s'):format(data.callsign, name)
+    end
+
+    return name
+end
+
+local function CreateOrUpdateBlip(data)
+    if not data or not data.coords then return end
+
+    local coords = data.coords
+    local jobBlip = data.blip or {}
+    local color = ResolveBlipColor(jobBlip.color)
+    local scale = tonumber(jobBlip.scale) or 1.2
+    local sprite = tonumber(jobBlip.sprite) or 1
+
+    local blip = PlayerBlips[data.serverId]
+
+    if not blip or not DoesBlipExist(blip) then
+        blip = AddBlipForCoord(coords.x, coords.y, coords.z)
+        PlayerBlips[data.serverId] = blip
+        SetBlipAsShortRange(blip, false)
+    else
+        SetBlipCoords(blip, coords.x, coords.y, coords.z)
+    end
+
+    SetBlipSprite(blip, sprite)
+    SetBlipColour(blip, color)
+    SetBlipScale(blip, scale)
+
+    BeginTextCommandSetBlipName('STRING')
+    AddTextComponentString(BuildBlipLabel(data))
+    EndTextCommandSetBlipName(blip)
+end
+
+function ClearAllBlips()
+    for serverId, blip in pairs(PlayerBlips) do
+        if DoesBlipExist(blip) then
+            RemoveBlip(blip)
+        end
+        PlayerBlips[serverId] = nil
+    end
+end
+
+local function RemoveBlipByServerId(serverId)
+    local blip = PlayerBlips[serverId]
+    if blip and DoesBlipExist(blip) then
+        RemoveBlip(blip)
+    end
+    PlayerBlips[serverId] = nil
+end
 
 function EnableTracker()
     local canUse, reason = CanUseTracker()
 
     if not canUse then
-        if reason ~= 'no_item' then
-            ShowNotification(reason)
-        end
+        ShowNotification(reason)
         return false
     end
 
@@ -210,6 +242,7 @@ function DisableTracker()
     if not TrackerEnabled then return true end
 
     TrackerEnabled = false
+    TriggerServerEvent('gps_tracker:disableTracker')
     ClearAllBlips()
     ShowNotification('tracker_disabled')
 
@@ -220,42 +253,79 @@ function GetTrackerStatus()
     return TrackerEnabled
 end
 
--- =============================================================================
--- BLIP MANAGEMENT
--- =============================================================================
-
-function ClearAllBlips()
-    for serverId, blip in pairs(PlayerBlips) do
-        if DoesBlipExist(blip) then
-            RemoveBlip(blip)
-        end
-    end
-    PlayerBlips = {}
-end
-
--- =============================================================================
--- UPDATE LOOP
--- =============================================================================
-
 function StartUpdateLoop()
     Citizen.CreateThread(function()
         while TrackerEnabled do
             local coords = GetEntityCoords(PlayerPedId())
 
             TriggerServerEvent('gps_tracker:updatePosition', {
-                x = coords.x,
-                y = coords.y,
-                z = coords.z
+                coords = {
+                    x = coords.x,
+                    y = coords.y,
+                    z = coords.z
+                }
             })
+
+            TriggerServerEvent('gps_tracker:getNearbyPlayers')
 
             Wait(Config.UpdateInterval or 3000)
         end
     end)
 end
 
--- =============================================================================
--- INITIALIZATION
--- =============================================================================
+RegisterNetEvent('gps_tracker:updateBlips', function(players)
+    if not TrackerEnabled then return end
+
+    local active = {}
+    for _, playerData in ipairs(players or {}) do
+        if playerData.serverId ~= GetPlayerServerId(PlayerId()) then
+            active[playerData.serverId] = true
+            CreateOrUpdateBlip(playerData)
+        end
+    end
+
+    for serverId, _ in pairs(PlayerBlips) do
+        if not active[serverId] then
+            RemoveBlipByServerId(serverId)
+        end
+    end
+end)
+
+RegisterNetEvent('gps_tracker:playerDisconnected', function(serverId)
+    if serverId == -1 then
+        ClearAllBlips()
+        return
+    end
+
+    RemoveBlipByServerId(serverId)
+end)
+
+local function RegisterTrackerCommands()
+    if Config.Commands and Config.Commands.enable and Config.Commands.enable ~= '' then
+        RegisterCommand(Config.Commands.enable, function()
+            EnableTracker()
+        end, false)
+    end
+
+    if Config.Commands and Config.Commands.disable and Config.Commands.disable ~= '' then
+        RegisterCommand(Config.Commands.disable, function()
+            DisableTracker()
+        end, false)
+    end
+
+    if Config.Commands and Config.Commands.status and Config.Commands.status ~= '' then
+        RegisterCommand(Config.Commands.status, function()
+            ShowNotification(TrackerEnabled and 'status_enabled' or 'status_disabled')
+        end, false)
+    end
+
+    if Config.Commands and Config.Commands.callsign and Config.Commands.callsign ~= '' then
+        RegisterCommand(Config.Commands.callsign, function(_, args)
+            local callsign = table.concat(args, ' ')
+            TriggerServerEvent('gps_tracker:setCallsign', callsign)
+        end, false)
+    end
+end
 
 Citizen.CreateThread(function()
     Wait(1000)
@@ -264,10 +334,17 @@ Citizen.CreateThread(function()
 
     if detected == 'ESX' then
         InitializeESX()
+        PlayerData = ESX.GetPlayerData() or {}
     elseif detected == 'QBCore' then
         InitializeQBCore()
+        PlayerData = QBCore.Functions.GetPlayerData() or {}
     end
 
+    if Config.AutoEnableOnDuty and PlayerData.job then
+        CheckJobAndEnableTracker()
+    end
+
+    RegisterTrackerCommands()
     exports('GetTrackerStatus', GetTrackerStatus)
 
     print('[GPS Tracker] Client initialized')
