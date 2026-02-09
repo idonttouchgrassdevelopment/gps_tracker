@@ -8,6 +8,10 @@ A complete, production-ready GPS tracking system for FiveM roleplay servers. Fea
 - **Job-Based Visibility**: Only players from configured job types can see each other on the map
 - **Cross-Job Visibility**: Support for multiple job categories that can see each other (e.g., police and sheriff)
 - **Optional Item Requirement**: Configurable requirement for players to have a specific item in inventory
+- **All-Job Support**: Optional fallback mode so any job can use the tracker
+- **Panic Button System**: Sends emergency panic alerts with configurable animation and temporary panic blips
+- **Cuff Abuse Protection**: Prevents tracker and panic usage while cuffed
+- **ox_inventory Ready**: Use tracker/panic as ox_inventory items via exports and client events
 - **Framework Support**: Full compatibility with ESX and QBCore frameworks
 - **Performance Optimized**: Efficient update intervals and batch processing for high-player-count servers
 - **Customizable Blips**: Configure different blip sprites, colors, and sizes per job type with player-name labels
@@ -177,6 +181,7 @@ By default, the following commands are available (configure in `config.lua`):
 - `/enabletracker` - Manually enable the GPS tracker
 - `/disabletracker` - Manually disable the GPS tracker
 - `/trackerstatus` - Check current tracker status
+- `/panic` - Send a panic alert to authorized units
 
 ## Framework-Specific Notes
 
@@ -489,3 +494,36 @@ This script is provided as-is for use in FiveM roleplay servers. Feel free to mo
 - [ESX Documentation](https://documentation.esx-framework.org/)
 - [QBCore Documentation](https://docs.qbcore.org/)
 - [FiveM Blip Reference](https://docs.fivem.net/docs/game-references/blips/)
+
+## ox_inventory Item Setup
+
+Add these items in your ox_inventory item definitions:
+
+```lua
+['gps_tracker'] = {
+    label = 'GPS Tracker',
+    stack = false,
+    close = true,
+    client = {
+        export = 'gps_tracker.UseTrackerItem'
+    }
+},
+['panic_button'] = {
+    label = 'Panic Button',
+    stack = false,
+    close = true,
+    client = {
+        export = 'gps_tracker.UsePanicItem'
+    }
+},
+```
+
+You can change item names in `Config.OxInventoryItems`, but if you change export wiring make sure the item points at the correct export/event in this resource.
+
+## New Config Options
+
+- `Config.AllowAllJobs` enables tracker/panic for any job not listed in `Config.Jobs`.
+- `Config.DefaultJob` controls fallback blip/visibility settings used by all non-configured jobs.
+- `Config.Animations.trackerToggle` and `Config.Animations.panic` let you fully configure animations and duration.
+- `Config.Panic` controls panic cooldown, panic blip style, and how long panic blips stay visible.
+- `Config.CuffChecks` blocks tracker/panic while the player is cuffed using state bag keys and optional exported checks.

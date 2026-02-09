@@ -37,6 +37,33 @@ Config.AutoEnableOnDuty = true
 -- Automatically disable tracker when player goes off duty
 Config.AutoDisableOffDuty = true
 
+
+-- Allow all jobs to use the tracker/panic system, even if not explicitly listed in Config.Jobs
+Config.AllowAllJobs = true
+
+-- Fallback blip used when Config.AllowAllJobs is enabled and job is not configured
+Config.DefaultJob = {
+    blip = {
+        sprite = 1,
+        color = 0,
+        scale = 1.0,
+        label = 'Unit',
+        showDistance = true,
+    },
+    visibleTo = {'all'},
+    requireOnDuty = false,
+}
+
+-- Cuff checks used to block tracker and panic abuse while restrained
+Config.CuffChecks = {
+    -- local state bag keys checked first: LocalPlayer.state[key]
+    stateKeys = {'isCuffed', 'cuffed', 'handcuffed', 'inCuffs'},
+    -- fallback exported checks (resource/exportName)
+    exports = {
+        -- {resource = 'qb-policejob', exportName = 'IsHandcuffed'}
+    }
+}
+
 -- =============================================================================
 -- ITEM REQUIREMENT (OPTIONAL)
 -- =============================================================================
@@ -48,6 +75,50 @@ Config.RequireItem = false
 -- The item name that players need in their inventory to use the tracker
 -- This item should exist in your server's items database
 Config.RequiredItem = 'gps_device'
+
+-- Prefer ox_inventory item checks when available (works for both ESX/QBCore)
+Config.UseOxInventory = true
+
+-- Register usable ox_inventory items (toggle tracker/panic)
+Config.OxInventoryItems = {
+    tracker = {
+        enabled = true,
+        name = 'gps_tracker'
+    },
+    panic = {
+        enabled = true,
+        name = 'panic_button'
+    }
+}
+
+-- Panic system settings
+Config.Panic = {
+    enabled = true,
+    cooldownMs = 15000,
+    blipDurationMs = 30000,
+    blip = {
+        sprite = 161,
+        color = 1,
+        scale = 1.4,
+        label = 'PANIC'
+    }
+}
+
+-- Animation settings used when toggling the tracker and sending panic alerts
+Config.Animations = {
+    trackerToggle = {
+        dict = 'cellphone@',
+        clip = 'cellphone_text_read_base',
+        duration = 1700,
+        flag = 49
+    },
+    panic = {
+        dict = 'random@arrests',
+        clip = 'generic_radio_chatter',
+        duration = 2200,
+        flag = 49
+    }
+}
 
 -- Display notification when player doesn't have the required item
 Config.ShowItemNotification = true
@@ -269,6 +340,10 @@ Config.Notifications = {
     ['not_on_duty'] = 'You must be on duty to use the tracker',
     ['not_authorized'] = 'You are not authorized to use the GPS tracker',
     ['item_removed'] = 'GPS device removed',
+    ['cannot_use_cuffed'] = 'You cannot use this while cuffed',
+    ['panic_sent'] = 'Panic signal sent',
+    ['panic_received'] = 'PANIC: Officer needs immediate assistance',
+    ['panic_cooldown'] = 'Panic button is on cooldown',
 }
 
 -- =============================================================================
@@ -282,6 +357,7 @@ Config.Commands = {
     enable = 'enabletracker',    -- Command to manually enable tracker
     disable = 'disabletracker',  -- Command to manually disable tracker
     status = 'trackerstatus',    -- Command to check tracker status
+    panic = 'panic',             -- Command to trigger a panic alert
 }
 
 -- =============================================================================
