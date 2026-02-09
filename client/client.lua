@@ -397,7 +397,7 @@ local function CreatePanicBlip(data)
 
     PanicBlips[key] = blip
 
-    SetTimeout((Config.Panic and Config.Panic.blipDurationMs) or 30000, function()
+    SetTimeout((Config.Panic and Config.Panic.blipDurationMs) or 15000, function()
         RemovePanicBlip(key)
     end)
 end
@@ -569,17 +569,6 @@ local function RegisterTrackerCommands()
         end, false)
     end
 
-    if IsCommandEnabled(Config.Commands.panicEnable) then
-        RegisterCommand(GetCommandName(Config.Commands.panicEnable), function()
-            SetPanicEnabled(true)
-        end, false)
-    end
-
-    if IsCommandEnabled(Config.Commands.panicDisable) then
-        RegisterCommand(GetCommandName(Config.Commands.panicDisable), function()
-            SetPanicEnabled(false)
-        end, false)
-    end
 
     if IsCommandEnabled(Config.Commands.panicStatus) then
         RegisterCommand(GetCommandName(Config.Commands.panicStatus), function()

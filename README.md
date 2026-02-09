@@ -182,8 +182,6 @@ By default, the following commands are available (configure in `config.lua` unde
 - `/disabletracker` - Manually disable the GPS tracker
 - `/trackerstatus` - Check current tracker status
 - `/panic` - Send a panic alert to authorized units
-- `/enablepanic` - Enable panic button usage
-- `/disablepanic` - Disable panic button usage
 - `/panicstatus` - Check whether panic button usage is enabled
 
 You can disable all commands with `Config.Commands.enabled = false` or disable each command individually with `enabled = false`.

@@ -95,7 +95,7 @@ Config.OxInventoryItems = {
 Config.Panic = {
     enabled = true,
     cooldownMs = 15000,
-    blipDurationMs = 30000,
+    blipDurationMs = 15000,
     blip = {
         sprite = 161,
         color = 1,
@@ -374,14 +374,6 @@ Config.Commands = {
     panic = {
         enabled = true,
         name = 'panic',          -- Command to trigger a panic alert
-    },
-    panicEnable = {
-        enabled = true,
-        name = 'enablepanic',    -- Enable panic button usage
-    },
-    panicDisable = {
-        enabled = true,
-        name = 'disablepanic',   -- Disable panic button usage
     },
     panicStatus = {
         enabled = true,
