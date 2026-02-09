@@ -402,7 +402,7 @@ local function CreatePanicBlip(data)
     end)
 end
 
-local function PlayPanicSound()
+local function PlayPanicSoundForDuration(durationMs)
     local panicConfig = Config.Panic or {}
     local soundConfig = panicConfig.sound or {}
 
@@ -412,19 +412,36 @@ local function PlayPanicSound()
 
     local audioName = soundConfig.audioName or '5_SEC_WARNING'
     local audioRef = soundConfig.audioRef or 'HUD_MINI_GAME_SOUNDSET'
+    local totalDuration = tonumber(durationMs) or (panicConfig.blipDurationMs or 15000)
+    local repeatIntervalMs = tonumber(soundConfig.repeatIntervalMs) or 1000
 
-    PlaySoundFrontend(-1, audioName, audioRef, true)
+    if repeatIntervalMs < 250 then
+        repeatIntervalMs = 250
+    end
+
+    CreateThread(function()
+        local startedAt = GetGameTimer()
+
+        while (GetGameTimer() - startedAt) < totalDuration do
+            PlaySoundFrontend(-1, audioName, audioRef, true)
+            Wait(repeatIntervalMs)
+        end
+    end)
 end
 
-local function SetPanicEnabled(state)
+local function SetPanicEnabled(state, showNotification)
     PanicEnabled = state == true
     TriggerServerEvent('gps_tracker:setPanicState', PanicEnabled)
-    ShowNotification(PanicEnabled and 'panic_enabled' or 'panic_disabled')
+
+    if showNotification == true then
+        ShowNotification(PanicEnabled and 'panic_enabled' or 'panic_disabled')
+    end
+
     return PanicEnabled
 end
 
 local function TogglePanicEnabled()
-    return SetPanicEnabled(not PanicEnabled)
+    return SetPanicEnabled(not PanicEnabled, true)
 end
 
 local function GetPanicEnabled()
@@ -512,7 +529,7 @@ RegisterNetEvent('gps_tracker:playerDisconnected', function(serverId)
 end)
 
 RegisterNetEvent('gps_tracker:panicSent', function()
-    PlayPanicSound()
+    PlayPanicSoundForDuration((Config.Panic and Config.Panic.blipDurationMs) or 15000)
     ShowNotification('panic_sent')
 end)
 
@@ -522,7 +539,7 @@ end)
 
 RegisterNetEvent('gps_tracker:receivePanic', function(data)
     CreatePanicBlip(data)
-    PlayPanicSound()
+    PlayPanicSoundForDuration((Config.Panic and Config.Panic.blipDurationMs) or 15000)
     ShowNotification('panic_received')
 end)
 

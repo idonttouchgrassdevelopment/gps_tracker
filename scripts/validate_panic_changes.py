@@ -14,7 +14,7 @@ def check(name, cond):
 
 check('client registers panicSent event', "RegisterNetEvent('gps_tracker:panicSent'" in client)
 check('client registers panicDenied event', "RegisterNetEvent('gps_tracker:panicDenied'" in client)
-check('client receive panic plays sound', re.search(r"gps_tracker:receivePanic'.*?PlayPanicSound\(\)", client, re.S))
+check('client receive panic plays sound', re.search(r"gps_tracker:receivePanic'.*?PlayPanicSoundForDuration\(", client, re.S))
 use_panic_match = re.search(r"local function UsePanic\(\)(.*?)end\n\n", client, re.S)
 check('client UsePanic block found', use_panic_match is not None)
 use_panic_block = use_panic_match.group(1) if use_panic_match else ''
