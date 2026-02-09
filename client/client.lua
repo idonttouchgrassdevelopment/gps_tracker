@@ -5,9 +5,11 @@
 local PlayerData = {}
 local TrackerEnabled = false
 local PlayerBlips = {}
+local PanicBlips = {}
 local Framework = nil
 local ESX = nil
 local QBCore = nil
+local LastPanicAt = 0
 
 local function ShowNotification(type)
     local message = (Config.Notifications and Config.Notifications[type]) or type
@@ -77,6 +79,33 @@ local function InitializeQBCore()
     end)
 end
 
+local function IsPlayerCuffed()
+    if LocalPlayer and LocalPlayer.state and Config.CuffChecks and Config.CuffChecks.stateKeys then
+        for _, key in ipairs(Config.CuffChecks.stateKeys) do
+            if LocalPlayer.state[key] then
+                return true
+            end
+        end
+    end
+
+    if Config.CuffChecks and Config.CuffChecks.exports then
+        for _, exportData in ipairs(Config.CuffChecks.exports) do
+            local resource = exportData.resource
+            local exportName = exportData.exportName
+            if resource and exportName and GetResourceState(resource) == 'started' then
+                local ok, result = pcall(function()
+                    return exports[resource][exportName]()
+                end)
+                if ok and result then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
 local function IsJobConfigured(jobName)
     if not jobName then return false end
 
@@ -90,11 +119,54 @@ local function IsJobConfigured(jobName)
         end
     end
 
+    if Config.AllowAllJobs then
+        return true, '__default'
+    end
+
     return false
+end
+
+local function GetJobConfig(configJobName)
+    if configJobName == '__default' then
+        return Config.DefaultJob or {}
+    end
+
+    return Config.Jobs[configJobName] or {}
+end
+
+local function HasRequiredItem()
+    if not Config.RequireItem then
+        return true
+    end
+
+    local requiredItem = Config.RequiredItem
+    if not requiredItem or requiredItem == '' then
+        return true
+    end
+
+    local hasItem = false
+
+    if Config.UseOxInventory and GetResourceState('ox_inventory') == 'started' then
+        local count = exports.ox_inventory:Search('count', requiredItem)
+        hasItem = count and count > 0
+    elseif Framework == 'QBCore' and QBCore then
+        local item = QBCore.Functions.GetItemByName(requiredItem)
+        hasItem = item ~= nil and item.amount > 0
+    end
+
+    if not hasItem and Config.ShowItemNotification then
+        ShowNotification('no_item')
+    end
+
+    return hasItem
 end
 
 local function CanUseTracker()
     if not PlayerData.job then return false end
+
+    if IsPlayerCuffed() then
+        return false, 'cannot_use_cuffed'
+    end
 
     local jobName = PlayerData.job.name
     local isConfigured, configJobName = IsJobConfigured(jobName)
@@ -103,7 +175,7 @@ local function CanUseTracker()
         return false, 'not_authorized'
     end
 
-    local jobConfig = Config.Jobs[configJobName]
+    local jobConfig = GetJobConfig(configJobName)
 
     if jobConfig.requireOnDuty then
         local onDuty = false
@@ -119,26 +191,33 @@ local function CanUseTracker()
         end
     end
 
-    if Config.RequireItem then
-        local hasItem = false
-
-        if Framework == 'ESX' and exports.ox_inventory then
-            local count = exports.ox_inventory:Search('count', Config.RequiredItem)
-            hasItem = count and count > 0
-        elseif Framework == 'QBCore' and QBCore then
-            local item = QBCore.Functions.GetItemByName(Config.RequiredItem)
-            hasItem = item ~= nil and item.amount > 0
-        end
-
-        if not hasItem then
-            if Config.ShowItemNotification then
-                ShowNotification('no_item')
-            end
-            return false, 'no_item'
-        end
+    if not HasRequiredItem() then
+        return false, 'no_item'
     end
 
     return true
+end
+
+local function PlayConfigAnimation(animConfig)
+    if not animConfig or not animConfig.dict or not animConfig.clip then
+        return
+    end
+
+    local ped = PlayerPedId()
+    RequestAnimDict(animConfig.dict)
+
+    local timeoutAt = GetGameTimer() + 3000
+    while not HasAnimDictLoaded(animConfig.dict) and GetGameTimer() < timeoutAt do
+        Wait(10)
+    end
+
+    if not HasAnimDictLoaded(animConfig.dict) then
+        return
+    end
+
+    TaskPlayAnim(ped, animConfig.dict, animConfig.clip, 3.0, 3.0, animConfig.duration or 1500, animConfig.flag or 49, 0.0, false, false, false)
+    Wait(animConfig.duration or 1500)
+    ClearPedTasks(ped)
 end
 
 function CheckJobAndEnableTracker()
@@ -147,7 +226,7 @@ function CheckJobAndEnableTracker()
     local canUse = CanUseTracker()
 
     if canUse and not TrackerEnabled then
-        EnableTracker()
+        EnableTracker(false)
     elseif not canUse and TrackerEnabled then
         DisableTracker()
     end
@@ -215,7 +294,7 @@ local function RemoveBlipByServerId(serverId)
     PlayerBlips[serverId] = nil
 end
 
-function EnableTracker()
+function EnableTracker(playAnimation)
     local canUse, reason = CanUseTracker()
 
     if not canUse then
@@ -224,6 +303,10 @@ function EnableTracker()
     end
 
     if TrackerEnabled then return true end
+
+    if playAnimation ~= false then
+        PlayConfigAnimation(Config.Animations and Config.Animations.trackerToggle)
+    end
 
     TrackerEnabled = true
     ShowNotification('tracker_enabled')
@@ -245,6 +328,15 @@ function DisableTracker()
     return true
 end
 
+
+function SetTrackerStatus(state)
+    if state then
+        return EnableTracker(true)
+    end
+
+    return DisableTracker()
+end
+
 function GetTrackerStatus()
     return TrackerEnabled
 end
@@ -252,6 +344,12 @@ end
 function StartUpdateLoop()
     Citizen.CreateThread(function()
         while TrackerEnabled do
+            if IsPlayerCuffed() then
+                DisableTracker()
+                ShowNotification('cannot_use_cuffed')
+                break
+            end
+
             local coords = GetEntityCoords(PlayerPedId())
 
             TriggerServerEvent('gps_tracker:updatePosition', {
@@ -268,6 +366,88 @@ function StartUpdateLoop()
         end
     end)
 end
+
+local function RemovePanicBlip(key)
+    local blip = PanicBlips[key]
+    if blip and DoesBlipExist(blip) then
+        RemoveBlip(blip)
+    end
+    PanicBlips[key] = nil
+end
+
+local function CreatePanicBlip(data)
+    if not data or not data.coords then
+        return
+    end
+
+    local blipConfig = (Config.Panic and Config.Panic.blip) or {}
+    local blip = AddBlipForCoord(data.coords.x, data.coords.y, data.coords.z)
+    local key = string.format('%s:%s', tostring(data.serverId or 'x'), tostring(GetGameTimer()))
+
+    SetBlipSprite(blip, blipConfig.sprite or 161)
+    SetBlipColour(blip, ResolveBlipColor(blipConfig.color or 1))
+    SetBlipScale(blip, blipConfig.scale or 1.4)
+    SetBlipFlashes(blip, true)
+    SetBlipAsShortRange(blip, false)
+
+    BeginTextCommandSetBlipName('STRING')
+    AddTextComponentString((blipConfig.label or 'PANIC') .. ' - ' .. (data.playerName or 'Unit'))
+    EndTextCommandSetBlipName(blip)
+
+    PanicBlips[key] = blip
+
+    SetTimeout((Config.Panic and Config.Panic.blipDurationMs) or 30000, function()
+        RemovePanicBlip(key)
+    end)
+end
+
+local function UsePanic()
+    if not Config.Panic or not Config.Panic.enabled then
+        return
+    end
+
+    if IsPlayerCuffed() then
+        ShowNotification('cannot_use_cuffed')
+        return
+    end
+
+    local canUse, reason = CanUseTracker()
+    if not canUse then
+        ShowNotification(reason)
+        return
+    end
+
+    local now = GetGameTimer()
+    if now - LastPanicAt < ((Config.Panic and Config.Panic.cooldownMs) or 15000) then
+        ShowNotification('panic_cooldown')
+        return
+    end
+
+    LastPanicAt = now
+    PlayConfigAnimation(Config.Animations and Config.Animations.panic)
+
+    local coords = GetEntityCoords(PlayerPedId())
+    TriggerServerEvent('gps_tracker:panic', {
+        coords = { x = coords.x, y = coords.y, z = coords.z }
+    })
+
+    ShowNotification('panic_sent')
+end
+
+
+exports('UseTrackerItem', function()
+    if TrackerEnabled then
+        DisableTracker()
+    else
+        EnableTracker(true)
+    end
+end)
+
+exports('UsePanicItem', function()
+    UsePanic()
+end)
+
+exports('SetTrackerStatus', SetTrackerStatus)
 
 RegisterNetEvent('gps_tracker:updateBlips', function(players)
     if not TrackerEnabled then return end
@@ -296,10 +476,27 @@ RegisterNetEvent('gps_tracker:playerDisconnected', function(serverId)
     RemoveBlipByServerId(serverId)
 end)
 
+RegisterNetEvent('gps_tracker:receivePanic', function(data)
+    CreatePanicBlip(data)
+    ShowNotification('panic_received')
+end)
+
+RegisterNetEvent('gps_tracker:useTrackerItem', function()
+    if TrackerEnabled then
+        DisableTracker()
+    else
+        EnableTracker(true)
+    end
+end)
+
+RegisterNetEvent('gps_tracker:usePanicItem', function()
+    UsePanic()
+end)
+
 local function RegisterTrackerCommands()
     if Config.Commands and Config.Commands.enable and Config.Commands.enable ~= '' then
         RegisterCommand(Config.Commands.enable, function()
-            EnableTracker()
+            EnableTracker(true)
         end, false)
     end
 
@@ -315,6 +512,11 @@ local function RegisterTrackerCommands()
         end, false)
     end
 
+    if Config.Commands and Config.Commands.panic and Config.Commands.panic ~= '' then
+        RegisterCommand(Config.Commands.panic, function()
+            UsePanic()
+        end, false)
+    end
 end
 
 Citizen.CreateThread(function()
@@ -336,6 +538,7 @@ Citizen.CreateThread(function()
 
     RegisterTrackerCommands()
     exports('GetTrackerStatus', GetTrackerStatus)
+
 
     print('[GPS Tracker] Client initialized')
 end)

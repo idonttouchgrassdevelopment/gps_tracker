@@ -23,6 +23,14 @@ local function DetectFramework()
     return 'ESX'
 end
 
+local function GetJobConfig(configJobName)
+    if configJobName == '__default' then
+        return Config.DefaultJob or {}
+    end
+
+    return Config.Jobs[configJobName] or {}
+end
+
 local function IsJobConfigured(jobName)
     if not jobName then return false, nil end
 
@@ -34,6 +42,10 @@ local function IsJobConfigured(jobName)
         if jobConfig.enabled and string.match(jobName, configJob) then
             return true, configJob
         end
+    end
+
+    if Config.AllowAllJobs then
+        return true, '__default'
     end
 
     return false, nil
@@ -70,6 +82,23 @@ local function GetPlayerNameByFramework(playerId)
     end
 
     return GetPlayerName(playerId) or ('Player ' .. tostring(playerId))
+end
+
+local function IsPlayerCuffed(playerId)
+    if not playerId then
+        return false
+    end
+
+    local playerState = Player(playerId) and Player(playerId).state
+    if playerState and Config.CuffChecks and Config.CuffChecks.stateKeys then
+        for _, key in ipairs(Config.CuffChecks.stateKeys) do
+            if playerState[key] then
+                return true
+            end
+        end
+    end
+
+    return false
 end
 
 local function InitializePlayer(playerId, playerData)
@@ -192,7 +221,7 @@ local function GetNearbyPlayers(requesterId)
         return {}
     end
 
-    local requesterJobConfig = Config.Jobs[requesterConfigJobName]
+    local requesterJobConfig = GetJobConfig(requesterConfigJobName)
 
     for playerId, playerData in pairs(Players) do
         if playerId ~= requesterId and playerData.isOnline and playerData.coords and playerData.trackerEnabled then
@@ -203,7 +232,7 @@ local function GetNearbyPlayers(requesterId)
                     serverId = playerId,
                     playerName = playerData.name,
                     job = playerData.job,
-                    blip = (Config.Jobs[targetConfigJobName] and Config.Jobs[targetConfigJobName].blip) or {},
+                    blip = GetJobConfig(targetConfigJobName).blip or {},
                     coords = playerData.coords
                 })
             end
@@ -216,6 +245,7 @@ end
 RegisterNetEvent('gps_tracker:updatePosition', function(positionData)
     local playerId = source
     if not EnsurePlayerInitialized(playerId) then return end
+    if IsPlayerCuffed(playerId) then return end
 
     local coords = positionData and positionData.coords
     if not coords then
@@ -249,6 +279,41 @@ RegisterNetEvent('gps_tracker:requestPlayerData', function()
     local playerId = source
     if not EnsurePlayerInitialized(playerId) then return end
     TriggerClientEvent('gps_tracker:updateBlips', playerId, GetNearbyPlayers(playerId))
+end)
+
+RegisterNetEvent('gps_tracker:panic', function(payload)
+    local playerId = source
+    if not EnsurePlayerInitialized(playerId) then return end
+    if IsPlayerCuffed(playerId) then return end
+    if not (Config.Panic and Config.Panic.enabled) then return end
+
+    local sender = Players[playerId]
+    local senderJob = sender and sender.job
+    local senderConfigured, senderConfigJobName = IsJobConfigured(senderJob and senderJob.name)
+    if not senderConfigured then return end
+
+    local senderJobConfig = GetJobConfig(senderConfigJobName)
+    local coords = payload and payload.coords or sender.coords
+    if not coords then return end
+
+    local panicData = {
+        serverId = playerId,
+        playerName = sender.name,
+        coords = {
+            x = coords.x,
+            y = coords.y,
+            z = coords.z
+        }
+    }
+
+    for targetId, targetData in pairs(Players) do
+        if targetData.isOnline and targetId ~= playerId then
+            local targetConfigured, targetConfigJobName = IsJobConfigured(targetData.job and targetData.job.name)
+            if targetConfigured and CanSeePlayer(GetJobConfig(targetConfigJobName), senderConfigJobName) then
+                TriggerClientEvent('gps_tracker:receivePanic', targetId, panicData)
+            end
+        end
+    end
 end)
 
 Citizen.CreateThread(function()

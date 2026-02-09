@@ -9,6 +9,10 @@ Locales['en'] = {
     ['item_removed'] = 'GPS device removed',
     ['status_enabled'] = 'GPS Tracker is enabled',
     ['status_disabled'] = 'GPS Tracker is disabled',
+    ['cannot_use_cuffed'] = 'You cannot use this while cuffed',
+    ['panic_sent'] = 'Panic signal sent',
+    ['panic_received'] = 'PANIC: Officer needs immediate assistance',
+    ['panic_cooldown'] = 'Panic button is on cooldown',
 }
 
 return Locales
