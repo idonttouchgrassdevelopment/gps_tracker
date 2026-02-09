@@ -404,6 +404,7 @@ end
 
 local function SetPanicEnabled(state)
     PanicEnabled = state == true
+    TriggerServerEvent('gps_tracker:setPanicState', PanicEnabled)
     ShowNotification(PanicEnabled and 'panic_enabled' or 'panic_disabled')
     return PanicEnabled
 end
@@ -655,6 +656,8 @@ Citizen.CreateThread(function()
     if Config.AutoEnableOnDuty and PlayerData.job then
         CheckJobAndEnableTracker()
     end
+
+    TriggerServerEvent('gps_tracker:setPanicState', PanicEnabled)
 
     RegisterTrackerCommands()
     RegisterTrackerKeybinds()
