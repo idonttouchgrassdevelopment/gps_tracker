@@ -54,6 +54,10 @@ local function ToggleMenu()
     SetMenuOpen(not MenuOpen)
 end
 
+local function IsOxLibMenuAvailable()
+    return GetResourceState('ox_lib') == 'started' and lib and type(lib.registerContext) == 'function' and type(lib.showContext) == 'function'
+end
+
 local function DetectFramework()
     if Config.Framework ~= 'Auto' then
         return Config.Framework
@@ -627,6 +631,7 @@ local function CreatePanicBlip(data)
 
     SetTimeout((Config.Panic and Config.Panic.blipDurationMs) or 15000, function()
         RemovePanicBlip(key)
+        RemovePanicBlip(key .. ':center')
         RemovePanicBlip(key .. ':radius')
     end)
 end
@@ -925,6 +930,50 @@ local function RegisterTrackerMenuBindings()
 
     if menuConfig.command and menuConfig.command ~= '' then
         RegisterCommand(menuConfig.command, function()
+            if IsOxLibMenuAvailable() then
+                local trackerEnabled = TrackerEnabled
+                local panicEnabled = PanicEnabled
+
+                lib.registerContext({
+                    id = 'gps_tracker:menu',
+                    title = 'GPS Tracker',
+                    options = {
+                        {
+                            title = trackerEnabled and 'Disable Tracker' or 'Enable Tracker',
+                            description = trackerEnabled and 'Tracker is currently enabled' or 'Tracker is currently disabled',
+                            icon = trackerEnabled and 'satellite-dish' or 'location-arrow',
+                            onSelect = function()
+                                if trackerEnabled then
+                                    DisableTracker(true)
+                                else
+                                    EnableTracker(true, true)
+                                end
+                            end
+                        },
+                        {
+                            title = panicEnabled and 'Disable Panic Button' or 'Enable Panic Button',
+                            description = panicEnabled and 'Panic button is currently enabled' or 'Panic button is currently disabled',
+                            icon = panicEnabled and 'bell-slash' or 'bell',
+                            onSelect = function()
+                                TogglePanicEnabled()
+                            end
+                        },
+                        {
+                            title = 'Send Panic Alert',
+                            description = 'Broadcast your panic location to authorized units',
+                            icon = 'triangle-exclamation',
+                            disabled = not panicEnabled,
+                            onSelect = function()
+                                UsePanic()
+                            end
+                        }
+                    }
+                })
+
+                lib.showContext('gps_tracker:menu')
+                return
+            end
+
             ToggleMenu()
         end, false)
 
