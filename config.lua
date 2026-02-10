@@ -120,7 +120,7 @@ Config.Panic = {
             color = 1,
             scale = 0.85
         },
-        showRadius = true,
+        showRadius = false,
         radius = 90.0,
         radiusColor = 1,
         radiusAlpha = 120
