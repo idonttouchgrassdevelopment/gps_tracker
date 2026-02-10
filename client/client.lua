@@ -677,7 +677,8 @@ local function UsePanic()
     end
 
     local now = GetGameTimer()
-    if now - LastPanicAt < ((Config.Panic and Config.Panic.cooldownMs) or 45000) then
+    local cooldownMs = ((Config.Panic and Config.Panic.cooldownMs) or 45000)
+    if LastPanicAt > 0 and (now - LastPanicAt) < cooldownMs then
         ShowNotification('panic_cooldown')
         return
     end
@@ -713,10 +714,8 @@ RegisterNetEvent('gps_tracker:updateBlips', function(players)
 
     local active = {}
     for _, playerData in ipairs(players or {}) do
-        if playerData.serverId ~= GetPlayerServerId(PlayerId()) then
-            active[playerData.serverId] = true
-            CreateOrUpdateBlip(playerData)
-        end
+        active[playerData.serverId] = true
+        CreateOrUpdateBlip(playerData)
     end
 
     for serverId, _ in pairs(PlayerBlips) do

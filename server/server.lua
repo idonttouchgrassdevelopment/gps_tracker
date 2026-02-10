@@ -333,7 +333,7 @@ local function GetNearbyPlayers(requesterId)
     local requesterJobConfig = GetJobConfig(requesterConfigJobName)
 
     for playerId, playerData in pairs(Players) do
-        if playerId ~= requesterId and playerData.isOnline and playerData.coords and playerData.trackerEnabled then
+        if playerData.isOnline and playerData.coords and playerData.trackerEnabled then
             local isTargetJobConfigured, targetConfigJobName = IsJobConfigured(playerData.job and playerData.job.name)
 
             if isTargetJobConfigured and CanSeePlayer(requesterJobConfig, targetConfigJobName) then
@@ -428,7 +428,7 @@ RegisterNetEvent('gps_tracker:panic', function(payload)
 
     local cooldownMs = (Config.Panic and Config.Panic.cooldownMs) or 45000
     local now = GetGameTimer()
-    if (now - (sender.panicLastAt or 0)) < cooldownMs then
+    if (sender.panicLastAt or 0) > 0 and (now - (sender.panicLastAt or 0)) < cooldownMs then
         TriggerClientEvent('gps_tracker:panicDenied', playerId, 'panic_cooldown')
         return
     end
