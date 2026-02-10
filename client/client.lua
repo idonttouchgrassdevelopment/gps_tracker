@@ -784,6 +784,8 @@ UsePanic = function()
     })
 end
 
+_G.UsePanic = UsePanic
+
 
 exports('UseTrackerItem', function()
     OpenTrackerMenu()
