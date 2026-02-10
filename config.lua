@@ -469,9 +469,9 @@ Config.Keybinds = {
 }
 
 -- =============================================================================
--- NUI MENU
+-- MENU
 -- =============================================================================
--- Small UI for quickly toggling tracker and panic state.
+-- Uses ox_lib context menu when ox_lib is running, otherwise falls back to NUI.
 -- =============================================================================
 
 Config.Menu = {
