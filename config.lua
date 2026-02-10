@@ -60,7 +60,8 @@ Config.CuffChecks = {
     stateKeys = {'isCuffed', 'cuffed', 'handcuffed', 'inCuffs'},
     -- fallback exported checks (resource/exportName)
     exports = {
-        -- {resource = 'qb-policejob', exportName = 'IsHandcuffed'}
+        --{resource = 'qb-policejob', exportName = 'IsHandcuffed'}
+        {resource = 'tk_policejob', exportName = 'isHandcuffed'}
     }
 }
 
