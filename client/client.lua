@@ -13,6 +13,10 @@ local LastPanicAt = 0
 local PanicEnabled = true
 local AutoEnableSuppressed = false
 local UsePanic
+local SyncSavedIdentityForCurrentJob
+local IdentityProfiles = {}
+local IdentityProfilesLoaded = false
+local IdentityProfilesKvpKey = 'gps_tracker:identity_profiles'
 
 local function ShowNotification(type)
     local message = (Config.Notifications and Config.Notifications[type]) or type
@@ -54,6 +58,7 @@ local function InitializeESX()
 
     RegisterNetEvent('esx:playerLoaded', function(xPlayer)
         PlayerData = xPlayer
+        SyncSavedIdentityForCurrentJob()
         if Config.AutoEnableOnDuty and PlayerData.job then
             CheckJobAndEnableTracker()
         end
@@ -61,6 +66,7 @@ local function InitializeESX()
 
     RegisterNetEvent('esx:setJob', function(job)
         PlayerData.job = job
+        SyncSavedIdentityForCurrentJob()
         if Config.AutoEnableOnDuty then
             CheckJobAndEnableTracker()
         end
@@ -73,6 +79,7 @@ local function InitializeQBCore()
 
     RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
         PlayerData = QBCore.Functions.GetPlayerData()
+        SyncSavedIdentityForCurrentJob()
         if Config.AutoEnableOnDuty and PlayerData.job then
             CheckJobAndEnableTracker()
         end
@@ -80,6 +87,7 @@ local function InitializeQBCore()
 
     RegisterNetEvent('QBCore:Client:OnJobUpdate', function(job)
         PlayerData.job = job
+        SyncSavedIdentityForCurrentJob()
         if Config.AutoEnableOnDuty then
             CheckJobAndEnableTracker()
         end
@@ -371,27 +379,126 @@ local function UpdateIdentityMetadata(payload)
     TriggerServerEvent('gps_tracker:updateIdentity', payload or {})
 end
 
+local function SanitizeIdentityValue(value, fallback, allowEmpty)
+    if type(value) ~= 'string' then
+        return fallback
+    end
+
+    local trimmed = value:gsub('^%s+', ''):gsub('%s+$', '')
+
+    if trimmed == '' then
+        if allowEmpty then
+            return ''
+        end
+
+        return fallback
+    end
+
+    if #trimmed > 48 then
+        trimmed = trimmed:sub(1, 48)
+    end
+
+    return trimmed
+end
+
+local function GetCurrentJobName()
+    return PlayerData and PlayerData.job and PlayerData.job.name or nil
+end
+
+local function GetCurrentJobDefaultIdentity()
+    local job = PlayerData and PlayerData.job or {}
+
+    return {
+        callsign = '',
+        rank = job.grade_name or tostring(job.grade or ''),
+        department = job.label or job.name or ''
+    }
+end
+
+local function LoadIdentityProfiles()
+    if IdentityProfilesLoaded then
+        return
+    end
+
+    IdentityProfilesLoaded = true
+
+    local raw = GetResourceKvpString(IdentityProfilesKvpKey)
+    if not raw or raw == '' then
+        return
+    end
+
+    local ok, parsed = pcall(function()
+        return json.decode(raw)
+    end)
+
+    if ok and type(parsed) == 'table' then
+        IdentityProfiles = parsed
+    end
+end
+
+local function SaveIdentityProfiles()
+    SetResourceKvp(IdentityProfilesKvpKey, json.encode(IdentityProfiles))
+end
+
+local function GetIdentityForCurrentJob()
+    local jobName = GetCurrentJobName()
+    local defaults = GetCurrentJobDefaultIdentity()
+
+    if not jobName then
+        return defaults
+    end
+
+    local saved = IdentityProfiles[jobName] or {}
+
+    return {
+        callsign = SanitizeIdentityValue(saved.callsign, defaults.callsign, true),
+        rank = SanitizeIdentityValue(saved.rank, defaults.rank, false),
+        department = SanitizeIdentityValue(saved.department, defaults.department, false)
+    }
+end
+
+SyncSavedIdentityForCurrentJob = function()
+    if not GetCurrentJobName() then
+        return
+    end
+
+    LoadIdentityProfiles()
+    UpdateIdentityMetadata(GetIdentityForCurrentJob())
+end
+
 local function ShowIdentityUpdateDialog()
     if not IsOxLibMenuAvailable() or type(lib.inputDialog) ~= 'function' then
         ShowNotification('ox_lib_required')
         return
     end
 
+    LoadIdentityProfiles()
+    local defaults = GetIdentityForCurrentJob()
+
     local response = lib.inputDialog('Update Unit Details', {
-        { type = 'input', label = 'Callsign', description = 'Your active unit callsign for map legend', required = false, max = 48 },
-        { type = 'input', label = 'Rank', description = 'Displayed rank/title in the map legend', required = false, max = 48 },
-        { type = 'input', label = 'Department', description = 'Department currently clocked onto', required = false, max = 48 }
+        { type = 'input', label = 'Callsign', description = 'Your active unit callsign for map legend', required = false, max = 48, default = defaults.callsign },
+        { type = 'input', label = 'Rank', description = 'Displayed rank/title in the map legend', required = false, max = 48, default = defaults.rank },
+        { type = 'input', label = 'Department', description = 'Department currently clocked onto', required = false, max = 48, default = defaults.department }
     })
 
     if not response then
         return
     end
 
-    UpdateIdentityMetadata({
-        callsign = response[1],
-        rank = response[2],
-        department = response[3]
-    })
+    local jobName = GetCurrentJobName()
+    local jobDefaults = GetCurrentJobDefaultIdentity()
+    local updatedIdentity = {
+        callsign = SanitizeIdentityValue(response[1], '', true),
+        rank = SanitizeIdentityValue(response[2], jobDefaults.rank, false),
+        department = SanitizeIdentityValue(response[3], jobDefaults.department, false)
+    }
+
+    if jobName then
+        IdentityProfiles[jobName] = updatedIdentity
+        SaveIdentityProfiles()
+    end
+
+    UpdateIdentityMetadata(updatedIdentity)
 end
 
 local function IsJobInList(jobName, jobs)
@@ -1081,6 +1188,9 @@ Citizen.CreateThread(function()
         InitializeQBCore()
         PlayerData = QBCore.Functions.GetPlayerData() or {}
     end
+
+    LoadIdentityProfiles()
+    SyncSavedIdentityForCurrentJob()
 
     if Config.AutoEnableOnDuty and PlayerData.job then
         CheckJobAndEnableTracker()
