@@ -354,9 +354,40 @@ local function ResolveBlipColor(color)
     return 1
 end
 
+local function ResolvePlayerDisplayName(rawPlayerName)
+    if type(rawPlayerName) == 'string' then
+        local trimmed = rawPlayerName:gsub('^%s+', ''):gsub('%s+$', '')
+        if trimmed ~= '' then
+            return trimmed
+        end
+    elseif type(rawPlayerName) == 'table' then
+        local firstName = rawPlayerName.firstname or rawPlayerName.firstName
+        local lastName = rawPlayerName.lastname or rawPlayerName.lastName
+
+        if type(firstName) == 'string' and type(lastName) == 'string' then
+            local combined = (firstName .. ' ' .. lastName):gsub('^%s+', ''):gsub('%s+$', '')
+            if combined ~= '' then
+                return combined
+            end
+        end
+
+        for _, key in ipairs({ 'name', 'fullName', 'label' }) do
+            if type(rawPlayerName[key]) == 'string' and rawPlayerName[key] ~= '' then
+                return rawPlayerName[key]
+            end
+        end
+    end
+
+    return 'Unknown'
+end
+
 local function BuildBlipLabel(data)
-    local name = data.playerName or 'Unknown'
+    local name = ResolvePlayerDisplayName(data.playerName)
     local parts = {}
+
+    if data.department and data.department ~= '' then
+        parts[#parts + 1] = ('00 [%s]'):format(data.department)
+    end
 
     if data.callsign and data.callsign ~= '' then
         parts[#parts + 1] = data.callsign
@@ -367,10 +398,6 @@ local function BuildBlipLabel(data)
     end
 
     parts[#parts + 1] = name
-
-    if data.department and data.department ~= '' then
-        parts[#parts + 1] = ('(%s)'):format(data.department)
-    end
 
     return table.concat(parts, ' | ')
 end
