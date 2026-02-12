@@ -386,7 +386,7 @@ local function BuildBlipLabel(data)
     local parts = {}
 
     if data.department and data.department ~= '' then
-        parts[#parts + 1] = ('00 [%s]'):format(data.department)
+        parts[#parts + 1] = ('[%s]'):format(data.department)
     end
 
     if data.callsign and data.callsign ~= '' then
