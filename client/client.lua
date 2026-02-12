@@ -1072,7 +1072,11 @@ RegisterNetEvent('gps_tracker:usePanicItem', function()
 end)
 
 RegisterNetEvent('gps_tracker:identityUpdated', function()
-    ShowNotification('identity_updated')
+    local currentJobName = GetCurrentJobName()
+
+    if currentJobName and IsMenuJobAuthorized(currentJobName) then
+        ShowNotification('identity_updated')
+    end
 end)
 
 local function GetCommandName(commandConfig)
